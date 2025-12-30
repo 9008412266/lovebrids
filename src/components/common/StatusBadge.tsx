@@ -5,9 +5,10 @@ interface StatusBadgeProps {
   status: HostStatus;
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
+  className?: string;
 }
 
-const StatusBadge = ({ status, size = 'md', showLabel = true }: StatusBadgeProps) => {
+const StatusBadge = ({ status, size = 'md', showLabel = true, className }: StatusBadgeProps) => {
   const sizes = {
     sm: 'w-2 h-2',
     md: 'w-3 h-3',
@@ -35,10 +36,10 @@ const StatusBadge = ({ status, size = 'md', showLabel = true }: StatusBadgeProps
   const config = statusConfig[status];
 
   return (
-    <div className="flex items-center gap-2">
+    <div className={cn("flex items-center gap-2", className)}>
       <div className={cn('rounded-full animate-pulse', sizes[size], config.color, config.glow)} />
       {showLabel && (
-        <span className="text-sm text-muted-foreground">{config.label}</span>
+        <span className="text-xs text-muted-foreground">{config.label}</span>
       )}
     </div>
   );
