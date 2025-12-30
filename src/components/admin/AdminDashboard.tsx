@@ -1,9 +1,16 @@
-import { Users, DollarSign, Phone, ShieldCheck, TrendingUp, FileCheck, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { Users, DollarSign, Phone, ShieldCheck, TrendingUp, FileCheck, LogOut, ArrowUpRight, Building2, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import AdminTransactions from './AdminTransactions';
+import AdminUsers from './AdminUsers';
+import AdminWithdrawals from './AdminWithdrawals';
+
+type AdminTab = 'dashboard' | 'transactions' | 'users' | 'withdrawals';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
 
   const stats = [
     { icon: Users, label: 'Total Users', value: '12,456', trend: '+12%' },
@@ -18,6 +25,25 @@ const AdminDashboard = () => {
     { name: 'Pooja Nair', city: 'Chennai', time: '5h ago' },
   ];
 
+  const tabs = [
+    { id: 'dashboard' as AdminTab, label: 'Overview' },
+    { id: 'users' as AdminTab, label: 'Users' },
+    { id: 'transactions' as AdminTab, label: 'Transactions' },
+    { id: 'withdrawals' as AdminTab, label: 'Withdrawals' },
+  ];
+
+  if (activeTab === 'transactions') {
+    return <AdminTransactions onBack={() => setActiveTab('dashboard')} />;
+  }
+
+  if (activeTab === 'users') {
+    return <AdminUsers onBack={() => setActiveTab('dashboard')} />;
+  }
+
+  if (activeTab === 'withdrawals') {
+    return <AdminWithdrawals onBack={() => setActiveTab('dashboard')} />;
+  }
+
   return (
     <div className="p-4 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -25,6 +51,23 @@ const AdminDashboard = () => {
         <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
           <LogOut size={18} />
         </Button>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-300 ${
+              activeTab === tab.id
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Stats Grid */}
@@ -41,14 +84,43 @@ const AdminDashboard = () => {
         ))}
       </div>
 
-      {/* Revenue Chart Placeholder */}
-      <div className="glass-card p-4">
-        <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-          <TrendingUp size={18} /> Revenue Analytics
+      {/* Revenue vs Commission */}
+      <div className="glass-card p-4 space-y-4">
+        <h3 className="font-semibold text-foreground flex items-center gap-2">
+          <TrendingUp size={18} /> Revenue Breakdown
         </h3>
-        <div className="h-32 bg-secondary rounded-xl flex items-center justify-center text-muted-foreground">
-          Chart Visualization
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-secondary p-4 rounded-xl">
+            <p className="text-xs text-muted-foreground mb-1">Host Earnings</p>
+            <p className="text-xl font-bold text-gradient-gold">₹2.94L</p>
+            <p className="text-xs text-muted-foreground">70% of revenue</p>
+          </div>
+          <div className="bg-secondary p-4 rounded-xl">
+            <p className="text-xs text-muted-foreground mb-1">Platform Commission</p>
+            <p className="text-xl font-bold text-gradient">₹1.26L</p>
+            <p className="text-xs text-muted-foreground">30% of revenue</p>
+          </div>
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 gap-4">
+        <button
+          onClick={() => setActiveTab('withdrawals')}
+          className="glass-card p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-all"
+        >
+          <Building2 className="text-accent" size={24} />
+          <span className="font-medium text-foreground">Withdrawals</span>
+          <span className="text-xs text-destructive">5 Pending</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('transactions')}
+          className="glass-card p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-all"
+        >
+          <History className="text-primary" size={24} />
+          <span className="font-medium text-foreground">Transactions</span>
+          <span className="text-xs text-muted-foreground">View All</span>
+        </button>
       </div>
 
       {/* Pending Verifications */}
