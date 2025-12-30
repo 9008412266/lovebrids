@@ -1,13 +1,28 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import MobileLayout from '@/components/layout/MobileLayout';
+import RegistrationFlow from '@/components/registration/RegistrationFlow';
+import Logo from '@/components/common/Logo';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+import { Shield } from 'lucide-react';
 
 const Index = () => {
+  const navigate = useNavigate();
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <MobileLayout>
+      <RegistrationFlow />
+      <div className="absolute bottom-6 left-0 right-0 px-6">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="w-full text-muted-foreground"
+          onClick={() => navigate('/admin-login')}
+        >
+          <Shield size={16} />
+          Admin Login
+        </Button>
       </div>
-    </div>
+    </MobileLayout>
   );
 };
 
