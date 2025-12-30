@@ -2,6 +2,8 @@ export type UserRole = 'caller' | 'host' | 'admin';
 
 export type Gender = 'male' | 'female';
 
+export type HostCategory = 'Star' | 'Relationship' | 'Marriage' | 'Confidence';
+
 export type HostStatus = 'available' | 'busy' | 'offline';
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
@@ -26,6 +28,8 @@ export interface Host extends User {
   totalMinutes: number;
   verificationStatus: VerificationStatus;
   earnings: number;
+  languages?: string[];
+  category?: HostCategory;
 }
 
 export interface Caller extends User {
