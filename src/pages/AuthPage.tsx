@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -6,30 +6,177 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Logo from '@/components/common/Logo';
 import { toast } from 'sonner';
-import { Mail, Lock, User, Phone, Calendar, MapPin, ArrowRight } from 'lucide-react';
+import { Phone, Lock, User, Calendar, MapPin, ArrowRight, Mail } from 'lucide-react';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 
 type AuthMode = 'login' | 'signup';
-type SignupStep = 'credentials' | 'details';
+type AuthStep = 'phone' | 'otp' | 'details';
 
 const AuthPage = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<AuthMode>('login');
-  const [signupStep, setSignupStep] = useState<SignupStep>('credentials');
+  const [step, setStep] = useState<AuthStep>('phone');
   const [loading, setLoading] = useState(false);
   
-  // Login/Signup credentials
+  // Phone & OTP
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  
+  // For email fallback (since phone OTP requires Twilio setup)
+  const [useEmail, setUseEmail] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
   // Profile details
   const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | ''>('');
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('India');
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // Check for existing session
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        redirectBasedOnRole(session.user.id);
+      }
+    };
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Check if profile exists
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+          
+          if (!profile) {
+            setStep('details');
+          } else {
+            redirectBasedOnRole(session.user.id);
+          }
+        }
+      }
+    );
+
+    checkSession();
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const redirectBasedOnRole = async (userId: string) => {
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (roleData?.role === 'host') {
+      navigate('/host');
+    } else if (roleData?.role === 'admin') {
+      navigate('/admin');
+    } else {
+      navigate('/caller');
+    }
+  };
+
+  const formatPhoneNumber = (phone: string) => {
+    // Remove all non-digits
+    const digits = phone.replace(/\D/g, '');
+    // Add +91 if not present
+    if (digits.startsWith('91') && digits.length === 12) {
+      return '+' + digits;
+    }
+    if (digits.length === 10) {
+      return '+91' + digits;
+    }
+    return '+' + digits;
+  };
+
+  const handleSendOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!phone || phone.replace(/\D/g, '').length < 10) {
+      toast.error('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    setLoading(true);
+    const formattedPhone = formatPhoneNumber(phone);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone,
+      });
+
+      if (error) {
+        // If phone OTP not configured, show message
+        if (error.message.includes('Phone') || error.message.includes('provider')) {
+          toast.error('Phone OTP is not configured. Please use email login instead.');
+          setUseEmail(true);
+          return;
+        }
+        throw error;
+      }
+
+      toast.success('OTP sent to your phone!');
+      setStep('otp');
+    } catch (error: any) {
+      console.error('OTP error:', error);
+      toast.error(error.message || 'Failed to send OTP. Try email login.');
+      setUseEmail(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (otp.length !== 6) {
+      toast.error('Please enter the 6-digit OTP');
+      return;
+    }
+
+    setLoading(true);
+    const formattedPhone = formatPhoneNumber(phone);
+
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: formattedPhone,
+        token: otp,
+        type: 'sms',
+      });
+
+      if (error) throw error;
+
+      toast.success('Phone verified successfully!');
+      
+      // Check if profile exists
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        if (!profile) {
+          setStep('details');
+        } else {
+          redirectBasedOnRole(data.user.id);
+        }
+      }
+    } catch (error: any) {
+      console.error('Verify OTP error:', error);
+      toast.error(error.message || 'Invalid OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
@@ -43,19 +190,8 @@ const AuthPage = () => {
 
       toast.success('Login successful!');
       
-      // Get user role and redirect
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', data.user.id)
-        .single();
-
-      if (roleData?.role === 'host') {
-        navigate('/host');
-      } else if (roleData?.role === 'admin') {
-        navigate('/admin');
-      } else {
-        navigate('/caller');
+      if (data.user) {
+        redirectBasedOnRole(data.user.id);
       }
     } catch (error: any) {
       console.error('Login error:', error);
@@ -65,7 +201,7 @@ const AuthPage = () => {
     }
   };
 
-  const handleSignupCredentials = async (e: React.FormEvent) => {
+  const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
@@ -78,10 +214,32 @@ const AuthPage = () => {
       return;
     }
 
-    setSignupStep('details');
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth`,
+        },
+      });
+
+      if (error) throw error;
+      
+      if (data.user) {
+        toast.success('Account created! Please complete your profile.');
+        setStep('details');
+      }
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      toast.error(error.message || 'Signup failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSignupComplete = async (e: React.FormEvent) => {
+  const handleCompleteProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!fullName || !gender || !city) {
@@ -92,25 +250,21 @@ const AuthPage = () => {
     setLoading(true);
 
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      });
-
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create user');
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error('Please login first');
+        setStep('phone');
+        return;
+      }
 
       // Create profile
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
-          user_id: authData.user.id,
+          user_id: user.id,
           full_name: fullName,
-          phone,
+          phone: phone || null,
           date_of_birth: dateOfBirth || null,
           gender,
           city,
@@ -119,7 +273,7 @@ const AuthPage = () => {
 
       if (profileError) throw profileError;
 
-      toast.success('Account created successfully!');
+      toast.success('Profile created successfully!');
       
       // Redirect based on gender/role
       if (gender === 'female') {
@@ -128,8 +282,8 @@ const AuthPage = () => {
         navigate('/caller');
       }
     } catch (error: any) {
-      console.error('Signup error:', error);
-      toast.error(error.message || 'Signup failed');
+      console.error('Profile error:', error);
+      toast.error(error.message || 'Failed to create profile');
     } finally {
       setLoading(false);
     }
@@ -142,13 +296,92 @@ const AuthPage = () => {
         <div className="text-center">
           <Logo size="lg" />
           <p className="mt-2 text-muted-foreground">
-            {mode === 'login' ? 'Welcome back!' : 'Create your account'}
+            {step === 'details' 
+              ? 'Complete your profile'
+              : mode === 'login' 
+                ? 'Welcome back!' 
+                : 'Create your account'
+            }
           </p>
         </div>
 
-        {/* Login Form */}
-        {mode === 'login' && (
-          <form onSubmit={handleLogin} className="space-y-6">
+        {/* Phone Input Step */}
+        {step === 'phone' && !useEmail && (
+          <form onSubmit={handleSendOTP} className="space-y-6">
+            <div>
+              <Label htmlFor="phone">Phone Number</Label>
+              <div className="relative mt-1">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 XXXXX XXXXX"
+                  className="pl-10"
+                  required
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                We'll send you a 6-digit OTP
+              </p>
+            </div>
+
+            <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
+              {loading ? 'Sending...' : 'Send OTP'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => setUseEmail(true)}
+              className="w-full text-center text-sm text-primary hover:underline"
+            >
+              Use email instead
+            </button>
+          </form>
+        )}
+
+        {/* OTP Verification Step */}
+        {step === 'otp' && !useEmail && (
+          <form onSubmit={handleVerifyOTP} className="space-y-6">
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-4">
+                Enter the 6-digit code sent to {phone}
+              </p>
+              <InputOTP 
+                maxLength={6} 
+                value={otp} 
+                onChange={(value) => setOtp(value)}
+                className="justify-center"
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
+
+            <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
+              {loading ? 'Verifying...' : 'Verify OTP'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => setStep('phone')}
+              className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              Change phone number
+            </button>
+          </form>
+        )}
+
+        {/* Email Login/Signup */}
+        {step === 'phone' && useEmail && (
+          <form onSubmit={mode === 'login' ? handleEmailLogin : handleEmailSignup} className="space-y-6">
             <div className="space-y-4">
               <div>
                 <Label htmlFor="email">Email</Label>
@@ -175,61 +408,7 @@ const AuthPage = () => {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="pl-10"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
-              {loading ? 'Logging in...' : 'Login'}
-            </Button>
-
-            <p className="text-center text-sm text-muted-foreground">
-              Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => setMode('signup')}
-                className="text-primary hover:underline"
-              >
-                Sign up
-              </button>
-            </p>
-          </form>
-        )}
-
-        {/* Signup Step 1: Credentials */}
-        {mode === 'signup' && signupStep === 'credentials' && (
-          <form onSubmit={handleSignupCredentials} className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="signup-email">Email</Label>
-                <div className="relative mt-1">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    className="pl-10"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="signup-password">Password</Label>
-                <div className="relative mt-1">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Create a password (min 6 chars)"
+                    placeholder={mode === 'signup' ? 'Create password (min 6 chars)' : 'Enter your password'}
                     className="pl-10"
                     minLength={6}
                     required
@@ -238,26 +417,36 @@ const AuthPage = () => {
               </div>
             </div>
 
-            <Button type="submit" variant="gradient" className="w-full">
-              Continue <ArrowRight size={16} className="ml-2" />
+            <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
+              {loading ? (mode === 'login' ? 'Logging in...' : 'Creating...') : (mode === 'login' ? 'Login' : 'Sign Up')}
             </Button>
 
-            <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
+            <div className="space-y-2">
+              <p className="text-center text-sm text-muted-foreground">
+                {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+                  className="text-primary hover:underline"
+                >
+                  {mode === 'login' ? 'Sign up' : 'Login'}
+                </button>
+              </p>
+              
               <button
                 type="button"
-                onClick={() => setMode('login')}
-                className="text-primary hover:underline"
+                onClick={() => setUseEmail(false)}
+                className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
               >
-                Login
+                Use phone number instead
               </button>
-            </p>
+            </div>
           </form>
         )}
 
-        {/* Signup Step 2: Personal Details */}
-        {mode === 'signup' && signupStep === 'details' && (
-          <form onSubmit={handleSignupComplete} className="space-y-6">
+        {/* Profile Details Step */}
+        {step === 'details' && (
+          <form onSubmit={handleCompleteProfile} className="space-y-6">
             <div className="space-y-4">
               <div>
                 <Label htmlFor="fullName">Full Name *</Label>
@@ -271,21 +460,6 @@ const AuthPage = () => {
                     placeholder="Enter your full name"
                     className="pl-10"
                     required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="phone">Phone Number</Label>
-                <div className="relative mt-1">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 XXXXX XXXXX"
-                    className="pl-10"
                   />
                 </div>
               </div>
@@ -353,19 +527,10 @@ const AuthPage = () => {
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <Button
-                type="button"
-                variant="secondary"
-                className="flex-1"
-                onClick={() => setSignupStep('credentials')}
-              >
-                Back
-              </Button>
-              <Button type="submit" variant="gradient" className="flex-1" disabled={loading}>
-                {loading ? 'Creating...' : 'Create Account'}
-              </Button>
-            </div>
+            <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
+              {loading ? 'Creating Profile...' : 'Complete Profile'}
+              <ArrowRight size={16} className="ml-2" />
+            </Button>
           </form>
         )}
       </div>
