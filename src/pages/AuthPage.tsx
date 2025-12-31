@@ -10,7 +10,7 @@ import { Phone, Lock, User, Calendar, MapPin, ArrowRight, Mail } from 'lucide-re
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 
 type AuthMode = 'login' | 'signup';
-type AuthStep = 'phone' | 'otp' | 'details';
+type AuthStep = 'phone' | 'otp' | 'details' | 'forgot-password';
 
 const AuthPage = () => {
   const navigate = useNavigate();
@@ -274,6 +274,33 @@ const AuthPage = () => {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email) {
+      toast.error('Please enter your email address');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+
+      if (error) throw error;
+      
+      toast.success('Password reset link sent to your email!');
+      setStep('phone');
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+      toast.error(error.message || 'Failed to send reset link');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCompleteProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -333,9 +360,11 @@ const AuthPage = () => {
           <p className="mt-2 text-muted-foreground">
             {step === 'details' 
               ? 'Complete your profile'
-              : mode === 'login' 
-                ? 'Welcome back!' 
-                : 'Create your account'
+              : step === 'forgot-password'
+                ? 'Reset your password'
+                : mode === 'login' 
+                  ? 'Welcome back!' 
+                  : 'Create your account'
             }
           </p>
         </div>
@@ -457,6 +486,16 @@ const AuthPage = () => {
             </Button>
 
             <div className="space-y-2">
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  onClick={() => setStep('forgot-password')}
+                  className="w-full text-center text-sm text-primary hover:underline"
+                >
+                  Forgot Password?
+                </button>
+              )}
+              
               <p className="text-center text-sm text-muted-foreground">
                 {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
                 <button
@@ -476,6 +515,42 @@ const AuthPage = () => {
                 Use phone number instead
               </button>
             </div>
+          </form>
+        )}
+
+        {/* Forgot Password Step */}
+        {step === 'forgot-password' && (
+          <form onSubmit={handleForgotPassword} className="space-y-6">
+            <div>
+              <Label htmlFor="resetEmail">Email</Label>
+              <div className="relative mt-1">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                <Input
+                  id="resetEmail"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="pl-10"
+                  required
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                We'll send you a link to reset your password
+              </p>
+            </div>
+
+            <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => setStep('phone')}
+              className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              Back to Login
+            </button>
           </form>
         )}
 
@@ -542,6 +617,21 @@ const AuthPage = () => {
                     <p className="mt-1 font-medium">Female</p>
                     <p className="text-xs text-muted-foreground">Host</p>
                   </button>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="phone">Phone Number</Label>
+                <div className="relative mt-1">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 XXXXX XXXXX"
+                    className="pl-10"
+                  />
                 </div>
               </div>
 
