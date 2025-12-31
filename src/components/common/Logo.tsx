@@ -14,14 +14,9 @@ const Logo = ({ size = 'md', showText = true }: LogoProps) => {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="relative">
-        <div className="absolute inset-0 gradient-primary rounded-full blur-lg opacity-50 animate-pulse-slow" />
-        <div className="relative gradient-primary p-2 rounded-full">
-          <Heart size={sizes[size].icon} className="text-primary-foreground fill-current" />
-        </div>
-      </div>
+      <Heart size={sizes[size].icon} className="text-primary fill-current" />
       {showText && (
-        <span className={`font-bold ${sizes[size].text} text-gradient`}>
+        <span className={`font-bold ${sizes[size].text} text-primary`}>
           Love Birds
         </span>
       )}
