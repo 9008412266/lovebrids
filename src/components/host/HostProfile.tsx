@@ -1,13 +1,62 @@
+import { useState, useEffect } from 'react';
 import { Settings, ChevronRight, Shield, Bell, HelpCircle, LogOut, Star, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import useAuth from '@/hooks/useAuth';
 
 const HostProfile = () => {
-  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [profile, setProfile] = useState<any>(null);
+  const [hostSettings, setHostSettings] = useState<any>(null);
+  const [wallet, setWallet] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchProfileData();
+    }
+  }, [user]);
+
+  const fetchProfileData = async () => {
+    if (!user) return;
+    
+    try {
+      // Fetch profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      setProfile(profileData);
+
+      // Fetch host settings
+      const { data: hostData } = await supabase
+        .from('host_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      setHostSettings(hostData);
+
+      // Fetch wallet
+      const { data: walletData } = await supabase
+        .from('wallets')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      setWallet(walletData);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const menuItems = [
     { icon: FileCheck, label: 'Verification Status', badge: 'Verified' },
-    { icon: Star, label: 'My Reviews', count: 156 },
+    { icon: Star, label: 'My Reviews', count: hostSettings?.total_calls || 0 },
     { icon: Bell, label: 'Notifications', toggle: true },
     { icon: Shield, label: 'Privacy & Security' },
     { icon: HelpCircle, label: 'Help & Support' },
@@ -21,36 +70,42 @@ const HostProfile = () => {
         <div className="absolute top-0 right-0 w-40 h-40 gradient-primary opacity-10 blur-3xl rounded-full" />
         <div className="relative">
           <div className="relative inline-block">
-            <img
-              src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150"
-              alt="Profile"
-              className="w-24 h-24 mx-auto rounded-full object-cover border-4 border-primary"
-            />
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt="Profile"
+                className="w-24 h-24 mx-auto rounded-full object-cover border-4 border-primary"
+              />
+            ) : (
+              <div className="w-24 h-24 mx-auto rounded-full bg-secondary flex items-center justify-center text-4xl border-4 border-primary">
+                👩
+              </div>
+            )}
             <div className="absolute bottom-0 right-0 w-6 h-6 bg-success rounded-full border-2 border-card flex items-center justify-center">
               <Shield size={12} className="text-success-foreground" />
             </div>
           </div>
-          <h2 className="text-xl font-bold text-foreground mt-4">Priya Sharma</h2>
-          <p className="text-muted-foreground text-sm">Mumbai, India</p>
+          <h2 className="text-xl font-bold text-foreground mt-4">{profile?.full_name || 'Host'}</h2>
+          <p className="text-muted-foreground text-sm">{profile?.city}, {profile?.country || 'India'}</p>
           <div className="flex items-center justify-center gap-1 mt-2">
             <Star size={16} className="text-accent fill-current" />
-            <span className="font-semibold text-foreground">4.8</span>
-            <span className="text-muted-foreground">(156 reviews)</span>
+            <span className="font-semibold text-foreground">{hostSettings?.rating || 4.5}</span>
+            <span className="text-muted-foreground">({hostSettings?.total_calls || 0} reviews)</span>
           </div>
           
           <div className="flex items-center justify-center gap-6 mt-4">
             <div className="text-center">
-              <p className="text-2xl font-bold text-gradient">234</p>
+              <p className="text-2xl font-bold text-gradient">{hostSettings?.total_calls || 0}</p>
               <p className="text-xs text-muted-foreground">Total Calls</p>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="text-center">
-              <p className="text-2xl font-bold text-gradient">40h</p>
+              <p className="text-2xl font-bold text-gradient">{hostSettings?.total_minutes || 0}m</p>
               <p className="text-xs text-muted-foreground">Talk Time</p>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="text-center">
-              <p className="text-2xl font-bold text-gradient-gold">₹18K</p>
+              <p className="text-2xl font-bold text-gradient-gold">₹{wallet?.total_earned || 0}</p>
               <p className="text-xs text-muted-foreground">Earned</p>
             </div>
           </div>
@@ -62,7 +117,7 @@ const HostProfile = () => {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Your Rate</p>
-            <p className="text-xl font-bold text-gradient">₹15/min</p>
+            <p className="text-xl font-bold text-gradient">₹{hostSettings?.voice_rate_per_minute || 5}/min</p>
           </div>
           <Button variant="outline" size="sm">Edit</Button>
         </div>
@@ -103,7 +158,7 @@ const HostProfile = () => {
       <Button 
         variant="outline" 
         className="w-full border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-        onClick={() => navigate('/')}
+        onClick={signOut}
       >
         <LogOut size={20} />
         Logout
