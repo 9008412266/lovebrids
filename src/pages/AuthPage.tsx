@@ -21,9 +21,10 @@ const AuthPage = () => {
   // Phone & OTP
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const [serverOtp, setServerOtp] = useState(''); // Store OTP from server for verification
   
-  // For email fallback (since phone OTP requires Twilio setup)
-  const [useEmail, setUseEmail] = useState(true);
+  // For email fallback
+  const [useEmail, setUseEmail] = useState(false); // Default to phone OTP now that Twilio is set up
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
@@ -107,26 +108,28 @@ const AuthPage = () => {
     const formattedPhone = formatPhoneNumber(phone);
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
+      // Use Twilio edge function to send OTP
+      const response = await supabase.functions.invoke('send-otp', {
+        body: { phone: formattedPhone },
       });
 
-      if (error) {
-        // If phone OTP not configured, show message
-        if (error.message.includes('Phone') || error.message.includes('provider')) {
-          toast.error('Phone OTP is not configured. Please use email login instead.');
-          setUseEmail(true);
-          return;
-        }
-        throw error;
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to send OTP');
       }
 
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      // Store the OTP for verification
+      setServerOtp(response.data.otp);
+      
       toast.success('OTP sent to your phone!');
       setStep('otp');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('OTP error:', error);
-      toast.error(error.message || 'Failed to send OTP. Try email login.');
-      setUseEmail(true);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send OTP';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -141,36 +144,68 @@ const AuthPage = () => {
     }
 
     setLoading(true);
-    const formattedPhone = formatPhoneNumber(phone);
 
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: formattedPhone,
-        token: otp,
-        type: 'sms',
+      // Verify OTP locally (compare with server-sent OTP)
+      if (otp !== serverOtp) {
+        throw new Error('Invalid OTP. Please try again.');
+      }
+
+      // OTP is correct - now sign up/sign in the user with phone
+      const formattedPhone = formatPhoneNumber(phone);
+      
+      // Create a unique email from phone for auth (since we're using custom OTP)
+      const phoneEmail = `${formattedPhone.replace(/\+/g, '')}@lovebirds.phone`;
+      const tempPassword = `LB_${serverOtp}_${Date.now()}`;
+
+      // Try to sign in first
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: phoneEmail,
+        password: tempPassword,
       });
 
-      if (error) throw error;
+      if (signInError) {
+        // If user doesn't exist, create account
+        if (signInError.message.includes('Invalid login credentials')) {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: phoneEmail,
+            password: tempPassword,
+            options: {
+              data: {
+                phone: formattedPhone,
+              },
+            },
+          });
+
+          if (signUpError) throw signUpError;
+
+          toast.success('Phone verified! Please complete your profile.');
+          setStep('details');
+          return;
+        }
+        throw signInError;
+      }
 
       toast.success('Phone verified successfully!');
       
       // Check if profile exists
-      if (data.user) {
+      if (signInData.user) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
-          .eq('user_id', data.user.id)
+          .eq('user_id', signInData.user.id)
           .maybeSingle();
 
         if (!profile) {
           setStep('details');
         } else {
-          redirectBasedOnRole(data.user.id);
+          redirectBasedOnRole(signInData.user.id);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Verify OTP error:', error);
-      toast.error(error.message || 'Invalid OTP');
+      const errorMessage = error instanceof Error ? error.message : 'Invalid OTP';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
