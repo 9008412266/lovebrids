@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Logo from '@/components/common/Logo';
 import { toast } from 'sonner';
-import { Phone, Lock, User, Calendar, MapPin, ArrowRight, Mail } from 'lucide-react';
+import { Phone, Lock, User, Calendar, MapPin, ArrowRight, Mail, Shield } from 'lucide-react';
 
 type AuthMode = 'login' | 'signup';
 type AuthStep = 'email' | 'details' | 'forgot-password';
@@ -306,6 +306,17 @@ const AuthPage = () => {
                   {mode === 'login' ? 'Sign up' : 'Login'}
                 </button>
               </p>
+
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin-login')}
+                  className="w-full text-center text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1"
+                >
+                  <Shield size={14} />
+                  Admin Login
+                </button>
+              )}
             </div>
           </form>
         )}
