@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Home, MessageCircle, Wallet, User } from 'lucide-react';
+import { Home, MessageCircle, Wallet, Settings } from 'lucide-react';
 import CallerHome from './CallerHome';
 import CallerWallet from './CallerWallet';
 import CallerChat from './CallerChat';
-import CallerProfile from './CallerProfile';
+import SettingsTab from '@/components/common/SettingsTab';
 
-type CallerTab = 'home' | 'chat' | 'wallet' | 'profile';
+type CallerTab = 'home' | 'chat' | 'wallet' | 'settings';
 
 const CallerDashboard = () => {
   const [activeTab, setActiveTab] = useState<CallerTab>('home');
@@ -14,7 +14,7 @@ const CallerDashboard = () => {
     { id: 'home' as CallerTab, icon: Home, label: 'Home' },
     { id: 'chat' as CallerTab, icon: MessageCircle, label: 'Chat' },
     { id: 'wallet' as CallerTab, icon: Wallet, label: 'Wallet' },
-    { id: 'profile' as CallerTab, icon: User, label: 'Profile' },
+    { id: 'settings' as CallerTab, icon: Settings, label: 'Settings' },
   ];
 
   const renderContent = () => {
@@ -25,8 +25,8 @@ const CallerDashboard = () => {
         return <CallerChat />;
       case 'wallet':
         return <CallerWallet />;
-      case 'profile':
-        return <CallerProfile />;
+      case 'settings':
+        return <SettingsTab />;
       default:
         return <CallerHome />;
     }

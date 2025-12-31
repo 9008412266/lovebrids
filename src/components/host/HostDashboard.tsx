@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Home, Wallet, History, User } from 'lucide-react';
+import { Home, Wallet, History, Settings } from 'lucide-react';
 import HostHome from './HostHome';
 import HostEarnings from './HostEarnings';
 import HostHistory from './HostHistory';
-import HostProfile from './HostProfile';
+import SettingsTab from '@/components/common/SettingsTab';
 
-type HostTab = 'home' | 'earnings' | 'history' | 'profile';
+type HostTab = 'home' | 'earnings' | 'history' | 'settings';
 
 const HostDashboard = () => {
   const [activeTab, setActiveTab] = useState<HostTab>('home');
@@ -14,7 +14,7 @@ const HostDashboard = () => {
     { id: 'home' as HostTab, icon: Home, label: 'Home' },
     { id: 'earnings' as HostTab, icon: Wallet, label: 'Earnings' },
     { id: 'history' as HostTab, icon: History, label: 'History' },
-    { id: 'profile' as HostTab, icon: User, label: 'Profile' },
+    { id: 'settings' as HostTab, icon: Settings, label: 'Settings' },
   ];
 
   const renderContent = () => {
@@ -25,8 +25,8 @@ const HostDashboard = () => {
         return <HostEarnings />;
       case 'history':
         return <HostHistory />;
-      case 'profile':
-        return <HostProfile />;
+      case 'settings':
+        return <SettingsTab />;
       default:
         return <HostHome />;
     }
