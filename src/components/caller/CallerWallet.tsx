@@ -1,46 +1,18 @@
-import { useState } from 'react';
-import { Plus, CreditCard, History, ArrowUpRight, ArrowDownLeft, Gift, Percent, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, CreditCard, History, ArrowUpRight, ArrowDownLeft, Gift, Percent, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Transaction } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
-const mockTransactions: Transaction[] = [
-  {
-    id: '1',
-    userId: 'caller1',
-    type: 'credit',
-    amount: 500,
-    description: 'Wallet Top-up',
-    timestamp: new Date('2024-01-15T10:30:00'),
-    status: 'completed',
-  },
-  {
-    id: '2',
-    userId: 'caller1',
-    type: 'debit',
-    amount: 150,
-    description: 'Video call with Priya',
-    timestamp: new Date('2024-01-15T11:45:00'),
-    status: 'completed',
-  },
-  {
-    id: '3',
-    userId: 'caller1',
-    type: 'debit',
-    amount: 75,
-    description: 'Voice call with Ananya',
-    timestamp: new Date('2024-01-14T16:20:00'),
-    status: 'completed',
-  },
-  {
-    id: '4',
-    userId: 'caller1',
-    type: 'credit',
-    amount: 1000,
-    description: 'Wallet Top-up',
-    timestamp: new Date('2024-01-13T09:00:00'),
-    status: 'completed',
-  },
-];
+interface Transaction {
+  id: string;
+  amount: number;
+  transaction_type: string;
+  description: string | null;
+  created_at: string;
+  balance_after: number | null;
+}
 
 interface RechargeOffer {
   amount: number;
@@ -80,17 +52,106 @@ const calculatePayment = (baseAmount: number, bonusPercent: number) => {
 };
 
 const CallerWallet = () => {
-  const [balance] = useState(1275);
+  const navigate = useNavigate();
+  const [balance, setBalance] = useState(0);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddMoney, setShowAddMoney] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<RechargeOffer | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    fetchWalletData();
+  }, []);
+
+  const fetchWalletData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate('/auth');
+        return;
+      }
+
+      // Fetch wallet
+      const { data: wallet, error: walletError } = await supabase
+        .from('wallets')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (walletError) throw walletError;
+      if (wallet) {
+        setBalance(Number(wallet.balance) || 0);
+      }
+
+      // Fetch transactions
+      const { data: txData, error: txError } = await supabase
+        .from('wallet_transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (txError) throw txError;
+      setTransactions(txData || []);
+    } catch (error: any) {
+      console.error('Error fetching wallet:', error);
+      toast.error('Failed to load wallet data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRecharge = async () => {
+    if (!selectedOffer) return;
+
+    setProcessing(true);
+    try {
+      const response = await supabase.functions.invoke('process-recharge', {
+        body: {
+          baseAmount: selectedOffer.amount,
+          bonusPercent: selectedOffer.bonus,
+          offerTag: selectedOffer.tag,
+        },
+      });
+
+      if (response.error) throw response.error;
+
+      const { newBalance, creditsReceived } = response.data;
+      setBalance(newBalance);
+      toast.success(`₹${creditsReceived} credits added to your wallet!`);
+      
+      setShowAddMoney(false);
+      setSelectedOffer(null);
+      fetchWalletData(); // Refresh transactions
+    } catch (error: any) {
+      console.error('Recharge error:', error);
+      toast.error(error.message || 'Recharge failed');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   const selectedPayment = selectedOffer ? calculatePayment(selectedOffer.amount, selectedOffer.bonus) : null;
+
+  if (loading) {
+    return (
+      <div className="p-4 flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-foreground">Wallet</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/caller')}>
+            <ArrowLeft size={20} />
+          </Button>
+          <h1 className="text-xl font-bold text-foreground">Wallet</h1>
+        </div>
         <Button variant="ghost" size="icon">
           <History size={20} />
         </Button>
@@ -102,7 +163,7 @@ const CallerWallet = () => {
         <div className="relative">
           <p className="text-muted-foreground text-sm mb-1">Available Balance</p>
           <div className="flex items-baseline gap-1">
-            <span className="text-4xl font-bold text-gradient">₹{balance.toLocaleString()}</span>
+            <span className="text-4xl font-bold text-gradient">₹{balance.toFixed(2)}</span>
           </div>
           <Button 
             variant="gradient" 
@@ -208,10 +269,17 @@ const CallerWallet = () => {
             variant="gold" 
             size="lg" 
             className="w-full"
-            disabled={!selectedOffer}
+            disabled={!selectedOffer || processing}
+            onClick={handleRecharge}
           >
-            <CreditCard size={20} />
-            Pay ₹{selectedPayment?.totalPayable || 0}
+            {processing ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <>
+                <CreditCard size={20} />
+                Pay ₹{selectedPayment?.totalPayable || 0}
+              </>
+            )}
           </Button>
         </div>
       )}
@@ -220,41 +288,48 @@ const CallerWallet = () => {
       <div className="space-y-4">
         <h2 className="font-semibold text-foreground">Recent Transactions</h2>
         <div className="space-y-3">
-          {mockTransactions.map((transaction, index) => (
-            <div
-              key={transaction.id}
-              className="glass-card p-4 flex items-center gap-4 animate-slide-up"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                transaction.type === 'credit' 
-                  ? 'bg-success/20 text-success' 
-                  : 'bg-destructive/20 text-destructive'
-              }`}>
-                {transaction.type === 'credit' ? (
-                  <ArrowDownLeft size={20} />
-                ) : (
-                  <ArrowUpRight size={20} />
-                )}
+          {transactions.length > 0 ? (
+            transactions.map((transaction, index) => (
+              <div
+                key={transaction.id}
+                className="glass-card p-4 flex items-center gap-4 animate-slide-up"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  transaction.amount > 0 
+                    ? 'bg-success/20 text-success' 
+                    : 'bg-destructive/20 text-destructive'
+                }`}>
+                  {transaction.amount > 0 ? (
+                    <ArrowDownLeft size={20} />
+                  ) : (
+                    <ArrowUpRight size={20} />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-foreground">{transaction.description || transaction.transaction_type}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(transaction.created_at).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+                <span className={`font-semibold ${
+                  transaction.amount > 0 ? 'text-success' : 'text-destructive'
+                }`}>
+                  {transaction.amount > 0 ? '+' : ''}₹{Math.abs(transaction.amount)}
+                </span>
               </div>
-              <div className="flex-1">
-                <p className="font-medium text-foreground">{transaction.description}</p>
-                <p className="text-xs text-muted-foreground">
-                  {transaction.timestamp.toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </p>
-              </div>
-              <span className={`font-semibold ${
-                transaction.type === 'credit' ? 'text-success' : 'text-destructive'
-              }`}>
-                {transaction.type === 'credit' ? '+' : '-'}₹{transaction.amount}
-              </span>
+            ))
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No transactions yet</p>
+              <p className="text-sm mt-1">Add money to get started!</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>

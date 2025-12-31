@@ -1,128 +1,126 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Star, Phone, Video, Shuffle, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import StatusBadge from '@/components/common/StatusBadge';
-import { Host, HostStatus } from '@/types';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-// Mock data for verified hosts only
-const mockHosts: Host[] = [
-  {
-    id: '1',
-    fullName: 'Priya Sharma',
-    phone: '+919876543210',
-    dateOfBirth: '1998-05-15',
-    gender: 'female',
-    city: 'Hyderabad, TS',
-    country: 'India',
-    role: 'host',
-    rating: 4.8,
-    pricePerMinute: 5,
-    status: 'available',
-    totalCalls: 234,
-    totalMinutes: 1205,
-    verificationStatus: 'approved',
-    earnings: 18075,
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    languages: ['Telugu', 'Hindi'],
-    category: 'Confidence',
-  },
-  {
-    id: '2',
-    fullName: 'Ananya Patel',
-    phone: '+919876543211',
-    dateOfBirth: '1999-08-22',
-    gender: 'female',
-    city: 'Hyderabad, TS',
-    country: 'India',
-    role: 'host',
-    rating: 4.9,
-    pricePerMinute: 7,
-    status: 'busy',
-    totalCalls: 456,
-    totalMinutes: 2340,
-    verificationStatus: 'approved',
-    earnings: 46800,
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    languages: ['Telugu'],
-    category: 'Relationship',
-  },
-  {
-    id: '3',
-    fullName: 'Riya Singh',
-    phone: '+919876543212',
-    dateOfBirth: '2000-03-10',
-    gender: 'female',
-    city: 'Bangalore',
-    country: 'India',
-    role: 'host',
-    rating: 4.6,
-    pricePerMinute: 5,
-    status: 'available',
-    totalCalls: 123,
-    totalMinutes: 678,
-    verificationStatus: 'approved',
-    earnings: 8136,
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-    languages: ['Telugu', 'Odia'],
-    category: 'Confidence',
-  },
-  {
-    id: '4',
-    fullName: 'Meera Joshi',
-    phone: '+919876543213',
-    dateOfBirth: '1997-11-28',
-    gender: 'female',
-    city: 'Pune',
-    country: 'India',
-    role: 'host',
-    rating: 4.7,
-    pricePerMinute: 7,
-    status: 'offline',
-    totalCalls: 345,
-    totalMinutes: 1890,
-    verificationStatus: 'approved',
-    earnings: 34020,
-    avatar: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=150',
-    languages: ['Hindi'],
-    category: 'Marriage',
-  },
-];
+interface HostData {
+  id: string;
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  city: string | null;
+  date_of_birth: string | null;
+  availability: 'online' | 'busy' | 'offline';
+  host_settings: {
+    voice_rate_per_minute: number;
+    video_rate_per_minute: number;
+    rating: number;
+    total_calls: number;
+    category: string;
+    languages: string[];
+  } | null;
+}
 
 const categories = ['All', 'Star', 'Relationship', 'Marriage', 'Confidence'];
 
 const CallerHome = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<HostStatus | 'all'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'busy' | 'offline'>('all');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [hosts, setHosts] = useState<HostData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [walletBalance, setWalletBalance] = useState(0);
   const navigate = useNavigate();
 
-  // Only show verified hosts
-  const verifiedHosts = mockHosts.filter(host => host.verificationStatus === 'approved');
-  
-  const filteredHosts = verifiedHosts.filter((host) => {
-    const matchesSearch = host.fullName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || host.status === filterStatus;
-    const matchesCategory = selectedCategory === 'All' || host.category === selectedCategory;
+  useEffect(() => {
+    fetchHosts();
+    fetchWalletBalance();
+  }, []);
+
+  const fetchHosts = async () => {
+    try {
+      // Fetch female profiles
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, user_id, full_name, avatar_url, city, date_of_birth, availability')
+        .eq('gender', 'female');
+
+      if (profilesError) throw profilesError;
+
+      // Fetch all host settings
+      const { data: hostSettings, error: settingsError } = await supabase
+        .from('host_settings')
+        .select('user_id, voice_rate_per_minute, video_rate_per_minute, rating, total_calls, category, languages');
+
+      if (settingsError) throw settingsError;
+
+      // Merge data
+      const hostsWithSettings: HostData[] = (profiles || [])
+        .map(profile => {
+          const settings = hostSettings?.find(s => s.user_id === profile.user_id);
+          if (!settings) return null;
+          return {
+            ...profile,
+            host_settings: settings,
+          } as HostData;
+        })
+        .filter((h): h is HostData => h !== null);
+
+      setHosts(hostsWithSettings);
+    } catch (error: any) {
+      console.error('Error fetching hosts:', error);
+      toast.error('Failed to load hosts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchWalletBalance = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (data) {
+        setWalletBalance(Number(data.balance) || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching wallet:', error);
+    }
+  };
+
+  const filteredHosts = hosts.filter((host) => {
+    const matchesSearch = host.full_name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || host.availability === filterStatus;
+    const matchesCategory = selectedCategory === 'All' || host.host_settings?.category === selectedCategory;
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
-  const availableHosts = verifiedHosts.filter(h => h.status === 'available');
+  const availableHosts = hosts.filter(h => h.availability === 'online');
   const hasAvailableHosts = availableHosts.length > 0;
 
-  const handleHostClick = (host: Host) => {
-    navigate(`/caller/host/${host.id}`);
+  const handleHostClick = (host: HostData) => {
+    navigate(`/caller/host/${host.user_id}`);
   };
 
   const handleRandomCall = () => {
     if (hasAvailableHosts) {
       const randomHost = availableHosts[Math.floor(Math.random() * availableHosts.length)];
-      navigate(`/caller/call/${randomHost.id}?type=audio`);
+      navigate(`/caller/call/${randomHost.user_id}?type=audio`);
     }
   };
 
-  const getAge = (dob: string) => {
+  const getAge = (dob: string | null) => {
+    if (!dob) return '??';
     const today = new Date();
     const birthDate = new Date(dob);
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -133,6 +131,14 @@ const CallerHome = () => {
     return age;
   };
 
+  if (loading) {
+    return (
+      <div className="p-4 flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 space-y-4 animate-fade-in">
       {/* Header */}
@@ -141,17 +147,23 @@ const CallerHome = () => {
           <h1 className="text-xl font-bold text-foreground italic">Love Birds</h1>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-primary text-primary text-sm font-medium">
-            ₹0.00
+          <button 
+            onClick={() => navigate('/caller/wallet')}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-primary text-primary text-sm font-medium hover:bg-primary/10 transition-colors"
+          >
+            ₹{walletBalance.toFixed(2)}
             <span className="text-lg">+</span>
-          </div>
-          <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center overflow-hidden">
+          </button>
+          <button 
+            onClick={() => navigate('/caller/profile')}
+            className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center overflow-hidden"
+          >
             <img 
               src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150" 
               alt="Profile" 
               className="w-full h-full object-cover"
             />
-          </div>
+          </button>
         </div>
       </div>
 
@@ -200,81 +212,82 @@ const CallerHome = () => {
 
       {/* Hosts List */}
       <div className="space-y-3">
-        {filteredHosts.map((host, index) => (
-          <div
-            key={host.id}
-            onClick={() => handleHostClick(host)}
-            className="bg-card rounded-2xl p-4 cursor-pointer hover:bg-card/80 transition-all duration-300 animate-slide-up border border-border/50"
-            style={{ animationDelay: `${index * 100}ms` }}
-          >
-            <div className="flex gap-4">
-              {/* Avatar with Status */}
-              <div className="relative">
-                <img
-                  src={host.avatar}
-                  alt={host.fullName}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-accent/30"
-                />
-                <div className={`absolute top-0 right-0 w-3 h-3 rounded-full border-2 border-card ${
-                  host.status === 'available' ? 'bg-success' :
-                  host.status === 'busy' ? 'bg-accent' : 'bg-muted-foreground'
-                }`} />
-                <StatusBadge status={host.status} size="sm" className="absolute -bottom-1 left-1/2 -translate-x-1/2" />
-                <div className="flex items-center gap-0.5 mt-1 justify-center">
-                  <Star size={12} className="fill-accent text-accent" />
-                  <span className="text-xs font-medium text-foreground">{host.rating}</span>
-                </div>
-              </div>
-
-              {/* Info */}
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-foreground">{host.fullName.split(' ')[0]}</h3>
-                    <span className="text-muted-foreground text-sm">• {getAge(host.dateOfBirth)} Y</span>
+        {filteredHosts.length > 0 ? (
+          filteredHosts.map((host, index) => (
+            <div
+              key={host.id}
+              onClick={() => handleHostClick(host)}
+              className="bg-card rounded-2xl p-4 cursor-pointer hover:bg-card/80 transition-all duration-300 animate-slide-up border border-border/50"
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              <div className="flex gap-4">
+                {/* Avatar with Status */}
+                <div className="relative">
+                  <img
+                    src={host.avatar_url || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}
+                    alt={host.full_name}
+                    className="w-16 h-16 rounded-full object-cover border-2 border-accent/30"
+                  />
+                  <div className={`absolute top-0 right-0 w-3 h-3 rounded-full border-2 border-card ${
+                    host.availability === 'online' ? 'bg-success' :
+                    host.availability === 'busy' ? 'bg-accent' : 'bg-muted-foreground'
+                  }`} />
+                  <StatusBadge status={host.availability === 'online' ? 'available' : host.availability === 'busy' ? 'busy' : 'offline'} size="sm" className="absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                  <div className="flex items-center gap-0.5 mt-1 justify-center">
+                    <Star size={12} className="fill-accent text-accent" />
+                    <span className="text-xs font-medium text-foreground">{host.host_settings?.rating || 4.5}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{host.languages?.join(' • ')}</span>
                 </div>
-                <p className="text-sm text-muted-foreground">{host.city}</p>
-                <p className="text-sm text-primary">{host.category}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="font-semibold text-foreground">₹{host.pricePerMinute}/min</span>
-                  
-                  {/* Call Button - Only show for available hosts */}
-                  {host.status === 'available' ? (
-                    <Button
-                      variant="gradient"
-                      size="sm"
-                      className="px-4"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/caller/call/${host.id}?type=audio`);
-                      }}
-                    >
-                      <Phone size={14} />
-                      Call Now
-                    </Button>
-                  ) : host.status === 'busy' ? (
-                    <Button variant="secondary" size="sm" disabled className="px-4">
-                      <Clock size={14} />
-                      Busy
-                    </Button>
-                  ) : (
-                    <Button variant="secondary" size="sm" disabled className="px-4 opacity-50">
-                      <Phone size={14} />
-                      Offline
-                    </Button>
-                  )}
+
+                {/* Info */}
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-foreground">{host.full_name.split(' ')[0]}</h3>
+                      <span className="text-muted-foreground text-sm">• {getAge(host.date_of_birth)} Y</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{host.host_settings?.languages?.join(' • ') || 'Hindi'}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{host.city || 'India'}</p>
+                  <p className="text-sm text-primary">{host.host_settings?.category || 'Confidence'}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="font-semibold text-foreground">₹{host.host_settings?.voice_rate_per_minute || 5}/min</span>
+                    
+                    {/* Call Button - Only show for available hosts */}
+                    {host.availability === 'online' ? (
+                      <Button
+                        variant="gradient"
+                        size="sm"
+                        className="px-4"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/caller/call/${host.user_id}?type=audio`);
+                        }}
+                      >
+                        <Phone size={14} />
+                        Call Now
+                      </Button>
+                    ) : host.availability === 'busy' ? (
+                      <Button variant="secondary" size="sm" disabled className="px-4">
+                        <Clock size={14} />
+                        Busy
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" size="sm" disabled className="px-4 opacity-50">
+                        <Phone size={14} />
+                        Offline
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-
-        {/* No Available Hosts Message */}
-        {filteredHosts.length === 0 && (
+          ))
+        ) : (
           <div className="text-center py-8">
-            <p className="text-muted-foreground mb-4">No hosts available right now</p>
+            <p className="text-muted-foreground mb-4">
+              {hosts.length === 0 ? 'No verified hosts available yet' : 'No hosts match your filters'}
+            </p>
             <Button variant="gradient" onClick={handleRandomCall} disabled={!hasAvailableHosts}>
               <Shuffle size={16} />
               Try Random Call
