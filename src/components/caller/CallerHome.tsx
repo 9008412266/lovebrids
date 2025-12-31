@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { Search, Star, Phone, Video, Shuffle, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ interface HostData {
 
 const categories = ['All', 'Star', 'Relationship', 'Marriage', 'Confidence'];
 
-const CallerHome = () => {
+const CallerHome = forwardRef<HTMLDivElement, {}>((_, ref) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'busy' | 'offline'>('all');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -140,7 +140,7 @@ const CallerHome = () => {
   }
 
   return (
-    <div className="p-4 space-y-4 animate-fade-in">
+    <div ref={ref} className="p-4 space-y-4 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -297,6 +297,8 @@ const CallerHome = () => {
       </div>
     </div>
   );
-};
+});
+
+CallerHome.displayName = 'CallerHome';
 
 export default CallerHome;
