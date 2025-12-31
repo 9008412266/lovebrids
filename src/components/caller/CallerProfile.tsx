@@ -1,13 +1,52 @@
+import { useState, useEffect } from 'react';
 import { Settings, ChevronRight, Heart, Clock, HelpCircle, LogOut, Shield, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import useAuth from '@/hooks/useAuth';
 
 const CallerProfile = () => {
-  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [profile, setProfile] = useState<any>(null);
+  const [wallet, setWallet] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchProfileData();
+    }
+  }, [user]);
+
+  const fetchProfileData = async () => {
+    if (!user) return;
+    
+    try {
+      // Fetch profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      setProfile(profileData);
+
+      // Fetch wallet
+      const { data: walletData } = await supabase
+        .from('wallets')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      setWallet(walletData);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const menuItems = [
     { icon: Heart, label: 'Favorites', count: 12 },
-    { icon: Clock, label: 'Call History', count: 45 },
+    { icon: Clock, label: 'Call History', count: wallet?.total_spent ? Math.floor(Number(wallet.total_spent) / 10) : 0 },
     { icon: Bell, label: 'Notifications', toggle: true },
     { icon: Shield, label: 'Privacy & Security' },
     { icon: HelpCircle, label: 'Help & Support' },
@@ -21,23 +60,27 @@ const CallerProfile = () => {
         <div className="absolute top-0 right-0 w-40 h-40 gradient-primary opacity-10 blur-3xl rounded-full" />
         <div className="relative">
           <div className="w-24 h-24 mx-auto rounded-full bg-secondary flex items-center justify-center text-4xl mb-4">
-            👤
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="Profile" className="w-full h-full rounded-full object-cover" />
+            ) : (
+              '👤'
+            )}
           </div>
-          <h2 className="text-xl font-bold text-foreground">Rahul Kumar</h2>
-          <p className="text-muted-foreground text-sm">+91 98765 43210</p>
+          <h2 className="text-xl font-bold text-foreground">{profile?.full_name || 'User'}</h2>
+          <p className="text-muted-foreground text-sm">{profile?.phone || user?.email}</p>
           <div className="flex items-center justify-center gap-4 mt-4">
             <div className="text-center">
-              <p className="text-2xl font-bold text-gradient">45</p>
+              <p className="text-2xl font-bold text-gradient">{wallet?.total_spent ? Math.floor(Number(wallet.total_spent) / 10) : 0}</p>
               <p className="text-xs text-muted-foreground">Total Calls</p>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="text-center">
-              <p className="text-2xl font-bold text-gradient">12h 30m</p>
+              <p className="text-2xl font-bold text-gradient">{wallet?.total_spent ? `${Math.floor(Number(wallet.total_spent) / 5)}m` : '0m'}</p>
               <p className="text-xs text-muted-foreground">Talk Time</p>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="text-center">
-              <p className="text-2xl font-bold text-gradient">₹2,450</p>
+              <p className="text-2xl font-bold text-gradient">₹{wallet?.total_spent || 0}</p>
               <p className="text-xs text-muted-foreground">Spent</p>
             </div>
           </div>
@@ -74,7 +117,7 @@ const CallerProfile = () => {
       <Button 
         variant="outline" 
         className="w-full border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-        onClick={() => navigate('/')}
+        onClick={signOut}
       >
         <LogOut size={20} />
         Logout
