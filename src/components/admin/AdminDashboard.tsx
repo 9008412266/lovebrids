@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Users, DollarSign, Phone, ShieldCheck, TrendingUp, FileCheck, LogOut, ArrowUpRight, Building2, History } from 'lucide-react';
+import { Users, DollarSign, Phone, ShieldCheck, TrendingUp, FileCheck, LogOut, ArrowUpRight, Building2, History, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import AdminTransactions from './AdminTransactions';
 import AdminUsers from './AdminUsers';
 import AdminWithdrawals from './AdminWithdrawals';
+import AdminLeaderboard from './AdminLeaderboard';
 
-type AdminTab = 'dashboard' | 'transactions' | 'users' | 'withdrawals';
+type AdminTab = 'dashboard' | 'transactions' | 'users' | 'withdrawals' | 'leaderboard';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ const AdminDashboard = () => {
     { id: 'users' as AdminTab, label: 'Users' },
     { id: 'transactions' as AdminTab, label: 'Transactions' },
     { id: 'withdrawals' as AdminTab, label: 'Withdrawals' },
+    { id: 'leaderboard' as AdminTab, label: 'Leaderboard' },
   ];
 
   if (activeTab === 'transactions') {
@@ -42,6 +44,10 @@ const AdminDashboard = () => {
 
   if (activeTab === 'withdrawals') {
     return <AdminWithdrawals onBack={() => setActiveTab('dashboard')} />;
+  }
+
+  if (activeTab === 'leaderboard') {
+    return <AdminLeaderboard onBack={() => setActiveTab('dashboard')} />;
   }
 
   return (
@@ -104,13 +110,13 @@ const AdminDashboard = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         <button
           onClick={() => setActiveTab('withdrawals')}
           className="glass-card p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-all"
         >
           <Building2 className="text-accent" size={24} />
-          <span className="font-medium text-foreground">Withdrawals</span>
+          <span className="font-medium text-foreground text-sm">Withdrawals</span>
           <span className="text-xs text-destructive">5 Pending</span>
         </button>
         <button
@@ -118,8 +124,16 @@ const AdminDashboard = () => {
           className="glass-card p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-all"
         >
           <History className="text-primary" size={24} />
-          <span className="font-medium text-foreground">Transactions</span>
+          <span className="font-medium text-foreground text-sm">Transactions</span>
           <span className="text-xs text-muted-foreground">View All</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('leaderboard')}
+          className="glass-card p-4 flex flex-col items-center gap-2 hover:bg-white/5 transition-all"
+        >
+          <Trophy className="text-yellow-500" size={24} />
+          <span className="font-medium text-foreground text-sm">Leaderboard</span>
+          <span className="text-xs text-muted-foreground">Top Hosts</span>
         </button>
       </div>
 
