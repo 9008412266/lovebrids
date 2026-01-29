@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Users, DollarSign, Phone, ShieldCheck, TrendingUp, FileCheck, LogOut, ArrowUpRight, Building2, History, Trophy } from 'lucide-react';
+import { Users, DollarSign, Phone, ShieldCheck, TrendingUp, FileCheck, LogOut, Building2, History, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import AdminTransactions from './AdminTransactions';
 import AdminUsers from './AdminUsers';
 import AdminWithdrawals from './AdminWithdrawals';
@@ -10,7 +10,7 @@ import AdminLeaderboard from './AdminLeaderboard';
 type AdminTab = 'dashboard' | 'transactions' | 'users' | 'withdrawals' | 'leaderboard';
 
 const AdminDashboard = () => {
-  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
 
   const stats = [
@@ -54,7 +54,7 @@ const AdminDashboard = () => {
     <div className="p-4 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">Admin Dashboard</h1>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+        <Button variant="ghost" size="sm" onClick={signOut}>
           <LogOut size={18} />
         </Button>
       </div>
