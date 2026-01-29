@@ -10,6 +10,7 @@ import CallerPage from "./pages/CallerPage";
 import HostPage from "./pages/HostPage";
 import AdminPage from "./pages/AdminPage";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -23,10 +24,22 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<AuthPage />} />
-            <Route path="/caller/*" element={<CallerPage />} />
-            <Route path="/host/*" element={<HostPage />} />
+            <Route path="/caller/*" element={
+              <ProtectedRoute requiredRole="caller">
+                <CallerPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/host/*" element={
+              <ProtectedRoute requiredRole="host">
+                <HostPage />
+              </ProtectedRoute>
+            } />
             <Route path="/admin-login" element={<AdminPage isLogin />} />
-            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin" element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminPage />
+              </ProtectedRoute>
+            } />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
