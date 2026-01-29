@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Users, DollarSign, Phone, ShieldCheck, TrendingUp, FileCheck, LogOut, Building2, History, Trophy } from 'lucide-react';
+import { Users, DollarSign, Phone, ShieldCheck, TrendingUp, FileCheck, LogOut, Building2, History, Trophy, ImagePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import AdminTransactions from './AdminTransactions';
 import AdminUsers from './AdminUsers';
 import AdminWithdrawals from './AdminWithdrawals';
 import AdminLeaderboard from './AdminLeaderboard';
+import AdminImageGenerator from './AdminImageGenerator';
 
-type AdminTab = 'dashboard' | 'transactions' | 'users' | 'withdrawals' | 'leaderboard';
+type AdminTab = 'dashboard' | 'transactions' | 'users' | 'withdrawals' | 'leaderboard' | 'images';
 
 const AdminDashboard = () => {
   const { signOut } = useAuth();
@@ -32,6 +33,7 @@ const AdminDashboard = () => {
     { id: 'transactions' as AdminTab, label: 'Transactions' },
     { id: 'withdrawals' as AdminTab, label: 'Withdrawals' },
     { id: 'leaderboard' as AdminTab, label: 'Leaderboard' },
+    { id: 'images' as AdminTab, label: 'Images' },
   ];
 
   if (activeTab === 'transactions') {
@@ -48,6 +50,10 @@ const AdminDashboard = () => {
 
   if (activeTab === 'leaderboard') {
     return <AdminLeaderboard onBack={() => setActiveTab('dashboard')} />;
+  }
+
+  if (activeTab === 'images') {
+    return <AdminImageGenerator onBack={() => setActiveTab('dashboard')} />;
   }
 
   return (
